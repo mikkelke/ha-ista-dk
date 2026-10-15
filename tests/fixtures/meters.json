@@ -1,0 +1,65 @@
+{
+ "errorMessage": {
+  "ErrorType": "",
+  "UserMessage": "",
+  "InternalMessage": ""
+ },
+ "Meters": {
+  "Value": [
+   {
+    "Message": " ",
+    "Headline": "Varmt vand",
+    "MeterText": "Varmt vand",
+    "MeterType": "HW",
+    "Unit": "m3",
+    "INST_NO": 1.0,
+    "Last_Meter_Reading": 205.125,
+    "Reading_date": "07-10-2026",
+    "Last_Meter_Consumption": 0.02,
+    "METER_ID": 80000000001.0,
+    "ROOM_DESCR": "Bathroom",
+    "METER_NO": "20000001",
+    "METCAT_LABEL": "HotWaterMeter",
+    "METTYPE_CODE": null,
+    "Deactivation_date": "3000-01-01T00:00:00",
+    "Activation_date": "2020-01-01T00:00:00"
+   },
+   {
+    "Message": " ",
+    "Headline": "Energi",
+    "MeterText": "Energi",
+    "MeterType": "ENERGY",
+    "Unit": "kWh",
+    "INST_NO": 1.0,
+    "Last_Meter_Reading": 3000.0,
+    "Reading_date": "07-10-2026",
+    "Last_Meter_Consumption": 0.0,
+    "METER_ID": 80000000002.0,
+    "ROOM_DESCR": "",
+    "METER_NO": "20000002",
+    "METCAT_LABEL": "HeatMeter",
+    "METTYPE_CODE": null,
+    "Deactivation_date": "3000-01-01T00:00:00",
+    "Activation_date": "2020-01-01T00:00:00"
+   },
+   {
+    "Message": " ",
+    "Headline": "Koldt vand",
+    "MeterText": "Koldt vand",
+    "MeterType": "CW",
+    "Unit": "m3",
+    "INST_NO": 1.0,
+    "Last_Meter_Reading": 412.75,
+    "Reading_date": "07-10-2026",
+    "Last_Meter_Consumption": 0.06,
+    "METER_ID": 80000000003.0,
+    "ROOM_DESCR": "Kitchen",
+    "METER_NO": "20000003",
+    "METCAT_LABEL": "ColdWaterMeter",
+    "METTYPE_CODE": null,
+    "Deactivation_date": "3000-01-01T00:00:00",
+    "Activation_date": "2020-01-01T00:00:00"
+   }
+  ]
+ }
+}

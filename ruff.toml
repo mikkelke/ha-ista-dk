@@ -1,0 +1,15 @@
+[lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+known-first-party = ["homeassistant", "pytest_homeassistant_custom_component"]
+section-order = [
+  "future",
+  "standard-library",
+  "third-party",
+  "first-party",
+  "integration",
+  "local-folder",
+]
+
+[lint.isort.sections]
+integration = ["custom_components"]

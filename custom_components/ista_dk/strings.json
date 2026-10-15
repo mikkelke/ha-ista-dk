@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ista",
+        "description": "Log in with the consumer number (forbrugernummer) and password you use on istaonline.dk.",
+        "data": {
+          "username": "Consumer number",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate ista",
+        "description": "ista rejected the stored login for consumer number {username}. Enter the password again.",
+        "data": {
+          "username": "Consumer number",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to ista.",
+      "invalid_auth": "Invalid consumer number or password.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This ista account is already configured.",
+      "reauth_successful": "Reauthentication was successful.",
+      "unique_id_mismatch": "The login belongs to a different ista account. Log in with the account that was originally configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Estimated prices",
+        "description": "Unit prices for the period ista has not settled yet. They are used for days after the newest settled statement until a newer statement arrives. Leave a field empty to keep using the settled price. Saving reloads the integration.",
+        "data": {
+          "estimate_brugsvand": "Water price estimate",
+          "estimate_varmt_vand": "Hot water heating price estimate",
+          "estimate_varme": "Heat price estimate"
+        },
+        "data_description": {
+          "estimate_brugsvand": "Price per m³ of cold water, as on the line Brugsvand kubikmeter of the water statement. Also part of the hot water price.",
+          "estimate_varmt_vand": "Price per m³ for heating the hot water, as on the line Varmt vand kubikmeter of the heat statement.",
+          "estimate_varme": "Price per kWh of heat, as on the line Varme KWh of the heat statement."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cold_water": {
+        "name": "Cold water"
+      },
+      "hot_water": {
+        "name": "Hot water"
+      },
+      "heat": {
+        "name": "Heat"
+      },
+      "cold_water_price": {
+        "name": "Cold water price"
+      },
+      "hot_water_price": {
+        "name": "Hot water price"
+      },
+      "heat_price": {
+        "name": "Heat price"
+      }
+    }
+  }
+}

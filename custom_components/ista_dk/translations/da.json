@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Forbind til ista",
+        "description": "Log ind med det forbrugernummer og den adgangskode, du bruger på istaonline.dk.",
+        "data": {
+          "username": "Forbrugernummer",
+          "password": "Adgangskode"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Log ind på ista igen",
+        "description": "ista afviste det gemte login for forbrugernummer {username}. Indtast adgangskoden igen.",
+        "data": {
+          "username": "Forbrugernummer",
+          "password": "Adgangskode"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kunne ikke oprette forbindelse til ista.",
+      "invalid_auth": "Ugyldigt forbrugernummer eller adgangskode.",
+      "unknown": "Uventet fejl."
+    },
+    "abort": {
+      "already_configured": "Denne ista-konto er allerede konfigureret.",
+      "reauth_successful": "Genautentificeringen lykkedes.",
+      "unique_id_mismatch": "Loginet tilhører en anden ista-konto. Log ind med den konto, der oprindeligt blev konfigureret."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Estimerede priser",
+        "description": "Enhedspriser for den periode, ista endnu ikke har opgjort. De bruges for dage efter den nyeste opgørelse, indtil en nyere opgørelse kommer. Lad et felt stå tomt for at bruge den opgjorte pris. Når du gemmer, genindlæses integrationen.",
+        "data": {
+          "estimate_brugsvand": "Estimeret vandpris",
+          "estimate_varmt_vand": "Estimeret pris for opvarmning af varmt vand",
+          "estimate_varme": "Estimeret varmepris"
+        },
+        "data_description": {
+          "estimate_brugsvand": "Pris pr. m³ koldt vand, som på linjen Brugsvand kubikmeter i vandregnskabet. Indgår også i prisen på varmt vand.",
+          "estimate_varmt_vand": "Pris pr. m³ for opvarmning af varmt vand, som på linjen Varmt vand kubikmeter i varmeregnskabet.",
+          "estimate_varme": "Pris pr. kWh varme, som på linjen Varme KWh i varmeregnskabet."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cold_water": {
+        "name": "Koldt vand"
+      },
+      "hot_water": {
+        "name": "Varmt vand"
+      },
+      "heat": {
+        "name": "Varme"
+      },
+      "cold_water_price": {
+        "name": "Pris for koldt vand"
+      },
+      "hot_water_price": {
+        "name": "Pris for varmt vand"
+      },
+      "heat_price": {
+        "name": "Pris for varme"
+      }
+    }
+  }
+}
