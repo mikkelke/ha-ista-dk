@@ -16,7 +16,8 @@ This is an unofficial integration. It is not affiliated with or endorsed by ista
 ## Features
 
 - UI-based setup with your consumer number (forbrugernummer) and password
-- One cumulative sensor per meter: cold water (m³), hot water (m³) and heat (kWh)
+- One cumulative sensor per meter: cold water (m³), hot water (m³) and heat (kWh),
+  or heat units for apartments with heat cost allocators on the radiators
 - The full daily consumption history that ista provides, imported as long-term
   statistics and extended on every poll
 - Cost statistics per meter, priced with the unit prices printed on your ista
@@ -74,6 +75,7 @@ One device per account, with one sensor for each meter the account has:
 | `ista Cold water` | m³ | Cumulative register of the cold water meter |
 | `ista Hot water` | m³ | Cumulative register of the hot water meter |
 | `ista Heat` | kWh | Cumulative register of the heat meter |
+| `ista Heat units` | units | Sum of the registers of all heat cost allocators |
 | `ista Cold water price` | currency/m³ | Unit price of cold water |
 | `ista Hot water price` | currency/m³ | Unit price of hot water |
 | `ista Heat price` | currency/kWh | Unit price of heat |
@@ -85,6 +87,20 @@ The price sensors appear once a unit price is known, see [Costs](#costs). They
 have the attributes `source` (`settled` or `estimate`), `period_start` and
 `period_end`.
 
+### Heat cost allocators
+
+Many apartments measure heat with a heat cost allocator (*varmefordeler*, ista
+meter type `HCA`) on each radiator instead of one heat meter. These count
+dimensionless units (*delinger*), not kWh. The integration adds the registers of
+all allocators into the `ista Heat units` sensor; an allocator that has never been
+read is left out, and `reading_date` is the newest date among them. Allocators
+are typically reset at the start of each accounting period, which the
+`total_increasing` state class treats as a meter reset.
+
+The daily units come from ista's `Heat` series. Units are not energy, so they
+cannot be added to the Energy dashboard and are not priced; use the statistics
+graph card instead.
+
 ## Statistics
 
 The daily consumption is imported as external long-term statistics, one per meter:
@@ -94,6 +110,7 @@ The daily consumption is imported as external long-term statistics, one per mete
 | `ista_dk:<consumer number>_cold_water` | m³ |
 | `ista_dk:<consumer number>_hot_water` | m³ |
 | `ista_dk:<consumer number>_heat` | kWh |
+| `ista_dk:<consumer number>_heat_units` | units |
 
 Each day is one row that starts at local midnight in Home Assistant's time zone.
 The row's `state` is the consumption of that day and its `sum` is the running

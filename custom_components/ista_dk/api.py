@@ -19,6 +19,7 @@ from .const import (
     STATEMENT_TYPES,
     STATEMENT_URL,
     STATEMENTS_URL,
+    SUMMED_KINDS,
     USAGE_SERIES,
     USAGE_URL,
     MeterKind,
@@ -136,17 +137,38 @@ def _parse_statements(payload: Any) -> list[Statement]:
 
 def _parse_meters(payload: Any) -> dict[MeterKind, Meter]:
     meters: dict[MeterKind, Meter] = {}
+    summed: dict[MeterKind, list[Meter]] = {}
     for row in payload["Meters"]["Value"]:
         kind = METER_TYPE_TO_KIND.get(row["MeterType"])
-        if kind is None or kind in meters:
+        if kind is None:
             continue
         reading = row.get("Last_Meter_Reading")
-        meters[kind] = Meter(
+        meter = Meter(
             kind=kind,
             reading=None if reading is None else float(reading),
             reading_date=_parse_reading_date(row.get("Reading_date")),
         )
+        if kind in SUMMED_KINDS:
+            summed.setdefault(kind, []).append(meter)
+        elif kind not in meters:
+            meters[kind] = meter
+    for kind, parts in summed.items():
+        meters[kind] = _sum_meters(kind, parts)
     return meters
+
+
+def _sum_meters(kind: MeterKind, parts: list[Meter]) -> Meter:
+    """Add up the registers of several meters of one kind.
+
+    Meters without a reading are left out; the date is the newest one.
+    """
+    readings = [part.reading for part in parts if part.reading is not None]
+    dates = [part.reading_date for part in parts if part.reading_date is not None]
+    return Meter(
+        kind=kind,
+        reading=sum(readings) if readings else None,
+        reading_date=max(dates) if dates else None,
+    )
 
 
 def _parse_usage(payload: Any) -> list[UsageDay]:

@@ -123,7 +123,7 @@ async def test_unknown_meter_types_and_bad_readings(api, aioclient_mock) -> None
 
     result = await api.async_get_meters()
 
-    assert set(result) == set(MeterKind)
+    assert set(result) == set(MeterKind) - {MeterKind.HEAT_UNITS}
     assert result[MeterKind.HOT_WATER] == Meter(MeterKind.HOT_WATER, None, None)
 
 
@@ -166,6 +166,7 @@ async def test_get_usage_uses_ista_headers_and_parses_days(api, aioclient_mock) 
         (MeterKind.COLD_WATER, "WaterCold"),
         (MeterKind.HOT_WATER, "WaterHot"),
         (MeterKind.HEAT, "Energy"),
+        (MeterKind.HEAT_UNITS, "Heat"),
     ],
 )
 async def test_usage_series_per_kind(api, aioclient_mock, kind, series) -> None:

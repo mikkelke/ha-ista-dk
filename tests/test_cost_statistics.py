@@ -35,7 +35,8 @@ def test_cost_statistic_ids() -> None:
     assert cost_statistic_id(CONS_ID, MeterKind.HOT_WATER) == (
         "ista_dk:12345678901_hot_water_cost"
     )
-    assert len(statistic_ids(CONS_ID)) == 6
+    assert len(statistic_ids(CONS_ID)) == 8
+    assert "ista_dk:12345678901_heat_units" in statistic_ids(CONS_ID)
     assert "ista_dk:12345678901_heat_cost" in statistic_ids(CONS_ID)
     assert "ista_dk:12345678901_heat" in statistic_ids(CONS_ID)
 

@@ -10,6 +10,9 @@
       "heat": {
         "default": "mdi:radiator"
       },
+      "heat_units": {
+        "default": "mdi:radiator"
+      },
       "cold_water_price": {
         "default": "mdi:cash"
       },

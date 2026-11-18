@@ -58,6 +58,9 @@
       "heat": {
         "name": "Heat"
       },
+      "heat_units": {
+        "name": "Heat units"
+      },
       "cold_water_price": {
         "name": "Cold water price"
       },

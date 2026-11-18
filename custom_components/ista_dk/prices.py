@@ -21,6 +21,8 @@ KIND_COMPONENTS: dict[MeterKind, tuple[PriceComponent, ...]] = {
     MeterKind.COLD_WATER: (PriceComponent.BRUGSVAND,),
     MeterKind.HOT_WATER: (PriceComponent.BRUGSVAND, PriceComponent.VARMT_VAND),
     MeterKind.HEAT: (PriceComponent.VARME,),
+    # No price line for heat cost allocator units is read from the statements.
+    MeterKind.HEAT_UNITS: (),
 }
 
 _AMOUNT = r"(?:\d{1,3}(?:\.\d{3})+|\d+),\d+"
@@ -160,8 +162,10 @@ class PriceTable:
 
     def price_on(self, kind: MeterKind, day: date) -> float | None:
         """Return the unit price of a meter kind on a day, None if unknown."""
+        if not (components := KIND_COMPONENTS[kind]):
+            return None
         total = 0.0
-        for component in KIND_COMPONENTS[kind]:
+        for component in components:
             if (price := self._component_price_on(component, day)) is None:
                 return None
             total += price
@@ -169,9 +173,11 @@ class PriceTable:
 
     def current(self, kind: MeterKind) -> CurrentPrice | None:
         """Return the unit price for the open period, None if unknown."""
+        if not (components := KIND_COMPONENTS[kind]):
+            return None
         prices: list[float] = []
         settled: list[PriceEntry] = []
-        for component in KIND_COMPONENTS[kind]:
+        for component in components:
             if component in self._estimates:
                 prices.append(self._estimates[component])
             elif periods := self._periods.get(component):

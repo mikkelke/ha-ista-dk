@@ -25,7 +25,7 @@ from homeassistant.util import dt as dt_util, slugify
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
 from .api import UsageDay
-from .const import DOMAIN, MeterKind
+from .const import DOMAIN, HEAT_UNITS_UNIT, MeterKind
 from .prices import PriceTable
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 class _StatisticKind:
     name: str
     unit: str
-    unit_class: str
+    unit_class: str | None
 
 
 STATISTIC_KINDS: dict[MeterKind, _StatisticKind] = {
@@ -48,6 +48,7 @@ STATISTIC_KINDS: dict[MeterKind, _StatisticKind] = {
     MeterKind.HEAT: _StatisticKind(
         "ista Heat", UnitOfEnergy.KILO_WATT_HOUR, EnergyConverter.UNIT_CLASS
     ),
+    MeterKind.HEAT_UNITS: _StatisticKind("ista Heat units", HEAT_UNITS_UNIT, None),
 }
 
 

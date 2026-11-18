@@ -58,6 +58,9 @@
       "heat": {
         "name": "Varme"
       },
+      "heat_units": {
+        "name": "Varmedelinger"
+      },
       "cold_water_price": {
         "name": "Pris for koldt vand"
       },

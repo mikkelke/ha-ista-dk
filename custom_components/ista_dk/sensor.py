@@ -23,6 +23,7 @@ from .const import (
     ATTR_READING_DATE,
     ATTR_SOURCE,
     DOMAIN,
+    HEAT_UNITS_UNIT,
     MeterKind,
 )
 from .coordinator import IstaDkConfigEntry, IstaDkCoordinator
@@ -60,6 +61,13 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         translation_key=MeterKind.HEAT,
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key=MeterKind.HEAT_UNITS,
+        translation_key=MeterKind.HEAT_UNITS,
+        native_unit_of_measurement=HEAT_UNITS_UNIT,
         state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=0,
     ),
