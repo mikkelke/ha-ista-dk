@@ -207,3 +207,40 @@ async def test_meters_of_one_kind_are_summed_and_deactivated_ones_skipped(
     assert float(hass.states.get("sensor.ista_cold_water").state) == pytest.approx(
         412.75 + 42.305
     )
+
+
+async def test_varmekontrol_account_gets_every_cost(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """A Vandregnskab and a Varmeregnskab in the Varmekontrol layout price all meters."""
+    water = StatementDoc(
+        "100000001",
+        "Vandregnskab",
+        PERIOD,
+        lines=[
+            "BRUGSVANDSOPGØRELSE",
+            "01-12-2025 - 30-11-2026",
+            "Forbrugsvand 624,44 m3 60,2964 37.651,37",
+        ],
+    )
+    heat = StatementDoc(
+        "100000002",
+        "Varmeregnskab",
+        PERIOD,
+        lines=[
+            "VARMEOPGØRELSE",
+            "01-12-2025 - 30-11-2026",
+            "Varme 66420,71 enheder 0,9028 59.966,33",
+            "Varmt vand 219,22 m3 71,9588 15.774,73",
+        ],
+    )
+    mock_ista(aioclient_mock, meters=_hca_meters(), statements=[water, heat])
+
+    await setup_integration(hass)
+
+    for kind in (MeterKind.COLD_WATER, MeterKind.HOT_WATER, MeterKind.HEAT_UNITS):
+        assert await get_statistics(hass, cost_statistic_id(CONS_ID, kind))
+    assert float(hass.states.get("sensor.ista_cold_water_price").state) == 60.2964
+    assert float(hass.states.get("sensor.ista_hot_water_price").state) == (
+        pytest.approx(60.2964 + 71.9588)
+    )

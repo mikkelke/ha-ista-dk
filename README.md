@@ -142,7 +142,8 @@ history from ista once more.
 
 ## Costs
 
-ista sends a settlement statement for water (*Brugsvandsregnskab*) and one for
+ista sends a settlement statement for water (*Brugsvandsregnskab*, at some
+properties *Vandregnskab*) and one for
 heat (*Varmeregnskab*) for each accounting period. The integration lists them
 on every poll, downloads each PDF once, reads the unit prices from its first page
 and keeps them in Home Assistant's storage.

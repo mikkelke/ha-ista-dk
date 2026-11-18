@@ -15,7 +15,8 @@ STATEMENT_URL = (
 )
 
 STATEMENT_ACCOUNT_ID = "CONSUMER_DIVISION_STATEMENT"
-STATEMENT_TYPES = frozenset({"Brugsvandsregnskab", "Varmeregnskab"})
+# Some properties list the water statement as Vandregnskab instead.
+STATEMENT_TYPES = frozenset({"Brugsvandsregnskab", "Vandregnskab", "Varmeregnskab"})
 
 UPDATE_INTERVAL = timedelta(hours=6)
 

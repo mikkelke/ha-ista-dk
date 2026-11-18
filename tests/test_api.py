@@ -347,6 +347,7 @@ async def test_get_statements_keeps_the_consumer_statements(
             account_id="FORECAST",
         ),
         StatementDoc("100000004", "Elregnskab", ("01-12-2024", "30-11-2025")),
+        StatementDoc("100000006", "Vandregnskab", ("01-12-2024", "30-11-2025")),
         StatementDoc(
             "100000005",
             "Varmeregnskab",
@@ -372,6 +373,13 @@ async def test_get_statements_keeps_the_consumer_statements(
             INST_ID,
             CONS_ID,
             "Brugsvandsregnskab 01.12.2024 - 30.11.2025",
+        ),
+        Statement(
+            "100000006",
+            WORKS_ID,
+            INST_ID,
+            CONS_ID,
+            "Vandregnskab 01.12.2024 - 30.11.2025",
         ),
     ]
     assert docs[0].row()["account_id"] == STATEMENT_ACCOUNT_ID
