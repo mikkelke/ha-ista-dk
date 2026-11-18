@@ -5,6 +5,9 @@ from typing import Any
 import pytest
 
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.components.recorder.common import (
+    async_wait_recording_done,
+)
 
 from custom_components.ista_dk.const import MeterKind
 from custom_components.ista_dk.statistics import cost_statistic_id, statistic_id
@@ -67,22 +70,46 @@ def _hca_meters() -> dict[str, Any]:
     return meters
 
 
-async def test_allocators_are_summed_into_one_sensor(
+async def test_heat_units_sensor_is_the_weighted_daily_total(
     hass: HomeAssistant, aioclient_mock
 ) -> None:
-    """All allocators make up one total-increasing sensor in units."""
+    """The sensor is the total of the weighted daily units, not the registers."""
     mock_ista(aioclient_mock, meters=_hca_meters())
 
     await setup_integration(hass)
 
+    days = [day for day in usage_days("Heat") if day.value is not None]
     state = hass.states.get("sensor.ista_heat_units")
     assert state is not None
-    assert state.state == str(9449.0 + 6639 + 5626 + 6920)
+    assert float(state.state) == sum(day.value for day in days)
     assert state.attributes["unit_of_measurement"] == "units"
     assert state.attributes["state_class"] == "total_increasing"
     assert "device_class" not in state.attributes
-    assert state.attributes["reading_date"] == "2026-11-13"
+    assert state.attributes["reading_date"] == days[-1].day.isoformat()
     assert hass.states.get("sensor.ista_heat") is None
+
+    rows = await get_statistics(hass, HEAT_UNITS)
+    assert float(state.state) == rows[-1]["sum"]
+
+
+async def test_heat_units_sensor_never_drops_when_old_days_go(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """Days that ista leaves out of the series later still count."""
+    rows = load_json("usage_Heat.json")
+    mock_ista(aioclient_mock, meters=_hca_meters(), usage={"Heat": rows})
+    entry = await setup_integration(hass)
+    before = float(hass.states.get("sensor.ista_heat_units").state)
+    await async_wait_recording_done(hass)
+
+    with_value = [i for i, row in enumerate(rows) if row["value"] is not None]
+    newer = rows[with_value[10] :]
+    newer[-1] = {**newer[-1], "value": 5}
+    aioclient_mock.clear_requests()
+    mock_ista(aioclient_mock, meters=_hca_meters(), usage={"Heat": newer})
+    await entry.runtime_data.async_refresh()
+
+    assert float(hass.states.get("sensor.ista_heat_units").state) == before + 5
 
 
 async def test_allocator_history_is_imported_from_the_heat_series(

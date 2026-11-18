@@ -75,7 +75,7 @@ One device per account, with one sensor for each meter the account has:
 | `ista Cold water` | m³ | Cumulative register of the cold water meter |
 | `ista Hot water` | m³ | Cumulative register of the hot water meter |
 | `ista Heat` | kWh | Cumulative register of the heat meter |
-| `ista Heat units` | units | Sum of the registers of all heat cost allocators |
+| `ista Heat units` | units | Total of the weighted daily heat units |
 | `ista Cold water price` | currency/m³ | Unit price of cold water |
 | `ista Hot water price` | currency/m³ | Unit price of hot water |
 | `ista Heat price` | currency/kWh | Unit price of heat |
@@ -92,11 +92,17 @@ have the attributes `source` (`settled` or `estimate`), `period_start` and
 
 Many apartments measure heat with a heat cost allocator (*varmefordeler*, ista
 meter type `HCA`) on each radiator instead of one heat meter. These count
-dimensionless units (*delinger*), not kWh. The integration adds the registers of
-all allocators into the `ista Heat units` sensor; an allocator that has never been
-read is left out, and `reading_date` is the newest date among them. Allocators
-are typically reset at the start of each accounting period, which the
-`total_increasing` state class treats as a meter reset.
+dimensionless units (*delinger*), not kWh. Each allocator's count is multiplied
+by a factor for the size and output of its radiator, and ista's `Heat` series
+holds the daily total of these weighted units, the units you are billed for.
+The raw allocator registers are not, so the `ista Heat units` sensor shows the
+running total of the imported daily units instead, the same value as the `sum`
+of the statistic. Its `reading_date` is the last day with a value, which lags
+about a week like the statistics.
+
+Fixed units that are not measured, such as floor heating billed as a set number
+of units, are not in the daily series, so they are missing from the units and
+their cost.
 
 The daily units come from ista's `Heat` series. Units are not energy, so they
 cannot be added to the Energy dashboard; use the statistics graph card instead.
