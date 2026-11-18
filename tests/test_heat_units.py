@@ -11,6 +11,7 @@ from custom_components.ista_dk.statistics import cost_statistic_id, statistic_id
 
 from .common import (
     CONS_ID,
+    StatementDoc,
     get_statistic_metadata,
     get_statistics,
     heat_statement,
@@ -20,7 +21,6 @@ from .common import (
     setup_integration,
     usage_days,
     usage_url,
-    water_statement,
 )
 
 pytestmark = pytest.mark.usefixtures("recorder_mock", "enable_custom_integrations")
@@ -110,20 +110,73 @@ async def test_allocator_history_is_imported_from_the_heat_series(
     )
 
 
-async def test_allocators_are_never_priced(hass: HomeAssistant, aioclient_mock) -> None:
-    """A heat statement prices kWh only, so units get no cost or price sensor."""
+async def test_allocators_are_priced_from_a_varmekontrol_statement(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """The units price of a Varmekontrol heat statement prices the units."""
+    heat = StatementDoc(
+        "100000002",
+        "Varmeregnskab",
+        PERIOD,
+        lines=[
+            "VARMEOPGØRELSE",
+            "01-12-2025 - 30-11-2026",
+            "Varme 66420,71 enheder 0,9028 59.966,33",
+            "Varmt vand 219,22 m3 71,9588 15.774,73",
+        ],
+    )
+    mock_ista(aioclient_mock, meters=_hca_meters(), statements=[heat])
+
+    await setup_integration(hass)
+
+    expected = [day.value for day in usage_days("Heat") if day.value is not None]
+    rows = await get_statistics(hass, HEAT_UNITS_COST)
+    assert [row["state"] for row in rows] == pytest.approx(
+        [value * 0.9028 for value in expected]
+    )
+    state = hass.states.get("sensor.ista_heat_units_price")
+    assert state is not None
+    assert state.state == "0.9028"
+    assert state.attributes["unit_of_measurement"] == "DKK/units"
+
+
+async def test_a_kwh_price_does_not_price_units(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """A heat statement in kWh gives no price for units."""
     mock_ista(
         aioclient_mock,
         meters=_hca_meters(),
-        statements=[
-            water_statement("100000001", PERIOD, 40.0),
-            heat_statement("100000002", PERIOD, 0.9, 30.0),
-        ],
+        statements=[heat_statement("100000002", PERIOD, 0.9, 30.0)],
     )
 
     await setup_integration(hass)
 
     assert await get_statistics(hass, HEAT_UNITS)
     assert await get_statistics(hass, HEAT_UNITS_COST) == []
-    assert hass.states.get("sensor.ista_cold_water_price") is not None
     assert hass.states.get("sensor.ista_heat_units_price") is None
+
+
+async def test_meters_of_one_kind_are_summed_and_deactivated_ones_skipped(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """Two cold water meters add up; a meter that was taken down does not count."""
+    meters = load_json("meters.json")
+    rows = meters["Meters"]["Value"]
+    cold = next(row for row in rows if row["MeterType"] == "CW")
+    rows.append({**cold, "Last_Meter_Reading": 42.305, "METER_NO": "20000004"})
+    rows.append(
+        {
+            **cold,
+            "Last_Meter_Reading": 999.0,
+            "METER_NO": "20000005",
+            "Deactivation_date": "2023-07-28T00:00:00",
+        }
+    )
+    mock_ista(aioclient_mock, meters=meters)
+
+    await setup_integration(hass)
+
+    assert float(hass.states.get("sensor.ista_cold_water").state) == pytest.approx(
+        412.75 + 42.305
+    )

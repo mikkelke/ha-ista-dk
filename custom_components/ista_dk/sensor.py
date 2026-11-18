@@ -95,6 +95,13 @@ PRICE_DESCRIPTIONS: tuple[IstaDkPriceDescription, ...] = (
         per_unit=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=4,
     ),
+    IstaDkPriceDescription(
+        key="heat_units_price",
+        translation_key="heat_units_price",
+        kind=MeterKind.HEAT_UNITS,
+        per_unit=HEAT_UNITS_UNIT,
+        suggested_display_precision=4,
+    ),
 )
 
 

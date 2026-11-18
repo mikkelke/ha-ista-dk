@@ -19,7 +19,6 @@ from .const import (
     STATEMENT_TYPES,
     STATEMENT_URL,
     STATEMENTS_URL,
-    SUMMED_KINDS,
     USAGE_SERIES,
     USAGE_URL,
     MeterKind,
@@ -135,26 +134,35 @@ def _parse_statements(payload: Any) -> list[Statement]:
     return statements
 
 
+def _is_deactivated(raw: Any) -> bool:
+    """Return whether a meter's deactivation date has passed."""
+    try:
+        deactivated = datetime.fromisoformat(raw).date()
+    except (TypeError, ValueError):
+        return False
+    return deactivated <= datetime.now(UTC).date()
+
+
 def _parse_meters(payload: Any) -> dict[MeterKind, Meter]:
-    meters: dict[MeterKind, Meter] = {}
-    summed: dict[MeterKind, list[Meter]] = {}
+    """Return one reading per meter kind.
+
+    A flat can have several meters of a kind, e.g. two cold water meters or a
+    heat cost allocator on every radiator. Their registers are added up.
+    """
+    parts: dict[MeterKind, list[Meter]] = {}
     for row in payload["Meters"]["Value"]:
         kind = METER_TYPE_TO_KIND.get(row["MeterType"])
-        if kind is None:
+        if kind is None or _is_deactivated(row.get("Deactivation_date")):
             continue
         reading = row.get("Last_Meter_Reading")
-        meter = Meter(
-            kind=kind,
-            reading=None if reading is None else float(reading),
-            reading_date=_parse_reading_date(row.get("Reading_date")),
+        parts.setdefault(kind, []).append(
+            Meter(
+                kind=kind,
+                reading=None if reading is None else float(reading),
+                reading_date=_parse_reading_date(row.get("Reading_date")),
+            )
         )
-        if kind in SUMMED_KINDS:
-            summed.setdefault(kind, []).append(meter)
-        elif kind not in meters:
-            meters[kind] = meter
-    for kind, parts in summed.items():
-        meters[kind] = _sum_meters(kind, parts)
-    return meters
+    return {kind: _sum_meters(kind, meters) for kind, meters in parts.items()}
 
 
 def _sum_meters(kind: MeterKind, parts: list[Meter]) -> Meter:

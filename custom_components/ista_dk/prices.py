@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+import math
 import re
 from typing import Any
 
@@ -21,8 +22,7 @@ KIND_COMPONENTS: dict[MeterKind, tuple[PriceComponent, ...]] = {
     MeterKind.COLD_WATER: (PriceComponent.BRUGSVAND,),
     MeterKind.HOT_WATER: (PriceComponent.BRUGSVAND, PriceComponent.VARMT_VAND),
     MeterKind.HEAT: (PriceComponent.VARME,),
-    # No price line for heat cost allocator units is read from the statements.
-    MeterKind.HEAT_UNITS: (),
+    MeterKind.HEAT_UNITS: (PriceComponent.VARME_ENHED,),
 }
 
 _AMOUNT = r"(?:\d{1,3}(?:\.\d{3})+|\d+),\d+"
@@ -39,6 +39,25 @@ _LABEL_COMPONENT = {
     "varmt vand kubikmeter": PriceComponent.VARMT_VAND,
     "varme kwh": PriceComponent.VARME,
 }
+
+# Statements made by Varmekontrol for ista print a bare period line and price
+# lines as "label quantity unit price total", e.g.
+# "Varme 66420,71 enheder 0,9028 59.966,33".
+_BARE_PERIOD = re.compile(
+    r"^\s*(\d{2}-\d{2}-\d{4})\s*[-–—]\s*(\d{2}-\d{2}-\d{4})\s*$", re.MULTILINE
+)
+_DISTRIBUTION_LINE = re.compile(
+    rf"^\s*(Forbrugsvand|Varmt\s+vand|Varme)\s+({_AMOUNT})\s+(m3|m³|enheder)"
+    rf"\s+({_AMOUNT})\s+({_AMOUNT})\s*$",
+    re.IGNORECASE,
+)
+_DISTRIBUTION_COMPONENT = {
+    ("forbrugsvand", "m3"): PriceComponent.BRUGSVAND,
+    ("varmt vand", "m3"): PriceComponent.VARMT_VAND,
+    ("varme", "enheder"): PriceComponent.VARME_ENHED,
+}
+# The printed price is rounded, so quantity times price is only close to the total.
+_TOTAL_TOLERANCE = 0.01
 _PLACEHOLDER = "denne service er ikke tilgængelig"
 
 
@@ -94,13 +113,28 @@ def is_placeholder(text: str) -> bool:
     return _PLACEHOLDER in " ".join(text.split()).casefold()
 
 
+def _distribution_price(line: str) -> tuple[PriceComponent, float] | None:
+    """Read a Varmekontrol price line whose quantity times price is its total."""
+    if (match := _DISTRIBUTION_LINE.search(line)) is None:
+        return None
+    label = " ".join(match[1].lower().split())
+    unit = "m3" if match[3].lower() in ("m3", "m³") else match[3].lower()
+    if (component := _DISTRIBUTION_COMPONENT.get((label, unit))) is None:
+        return None
+    quantity, price, total = (_parse_number(match[i]) for i in (2, 4, 5))
+    if not math.isclose(quantity * price, total, rel_tol=_TOTAL_TOLERANCE):
+        return None
+    return component, price
+
+
 def parse_statement(text: str) -> list[PriceEntry]:
     """Read the unit prices of one statement from the text of its first page.
 
-    A statement covers one "For perioden" span and the price lines can come
-    before or after it. When a component has several lines the first one counts.
+    A statement covers one "For perioden" span, or a bare period line in the
+    Varmekontrol layout, and the price lines can come before or after it. When
+    a component has several lines the first one counts.
     """
-    if (period := _PERIOD.search(text)) is None:
+    if (period := _PERIOD.search(text) or _BARE_PERIOD.search(text)) is None:
         return []
     try:
         start, end = _parse_date(period[1]), _parse_date(period[2])
@@ -114,6 +148,8 @@ def parse_statement(text: str) -> list[PriceEntry]:
         if match := _PRICE_LINE.search(line):
             component = _LABEL_COMPONENT[" ".join(match[1].lower().split())]
             prices.setdefault(component, _parse_number(match[2]))
+        elif distribution := _distribution_price(line):
+            prices.setdefault(*distribution)
     return [
         PriceEntry(component, start, end, price) for component, price in prices.items()
     ]

@@ -79,6 +79,7 @@ One device per account, with one sensor for each meter the account has:
 | `ista Cold water price` | currency/m³ | Unit price of cold water |
 | `ista Hot water price` | currency/m³ | Unit price of hot water |
 | `ista Heat price` | currency/kWh | Unit price of heat |
+| `ista Heat units price` | currency/units | Unit price of heat units |
 
 The meter sensors use the `total_increasing` state class. Each has a
 `reading_date` attribute with the date of the latest reading as an ISO date.
@@ -98,8 +99,14 @@ are typically reset at the start of each accounting period, which the
 `total_increasing` state class treats as a meter reset.
 
 The daily units come from ista's `Heat` series. Units are not energy, so they
-cannot be added to the Energy dashboard and are not priced; use the statistics
-graph card instead.
+cannot be added to the Energy dashboard; use the statistics graph card instead.
+They are priced with the heat units price of the statement, see [Costs](#costs).
+
+### Several meters of one kind
+
+A flat can have more than one meter of a kind, such as two cold water meters.
+Their registers are added up into the one sensor of that kind. Meters whose
+deactivation date has passed are left out.
 
 ## Statistics
 
@@ -139,6 +146,14 @@ and keeps them in Home Assistant's storage.
 | Cold water | *Brugsvand kubikmeter* |
 | Hot water | *Brugsvand kubikmeter* plus *Varmt vand kubikmeter* |
 | Heat | *Varme KWh* |
+| Heat units | *Varme … enheder* (Varmekontrol layout) |
+
+Some properties get their statements from Varmekontrol, which prints a bare
+period line and the price lines as *label quantity unit price total*, for example
+`Varme 66420,71 enheder 0,9028 59.966,33`. There *Forbrugsvand* is the
+*Brugsvand* price, *Varmt vand … m3* the hot water heating price and
+*Varme … enheder* the heat units price. A line is only used when its quantity
+times its price gives its total.
 
 The prices are taken as printed. Fixed charges on the statements (per square
 meter, tap shares, energy management and so on) are not included, so the cost is

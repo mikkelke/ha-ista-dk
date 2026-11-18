@@ -440,3 +440,79 @@ def test_placeholder_document_is_recognised_in_a_pdf() -> None:
     )
 
     assert is_placeholder(text)
+
+
+VARMEKONTROL_HEAT = [
+    "VARMEOPGØRELSE",
+    "01-06-2024 - 31-05-2025",
+    "24-06-2025",
+    "Ejendommens udgifter fordeles på: Kr.à kr.",
+    "Varme 66420,71 enheder 0,9028 59.966,33",
+    "Varmt vand 219,22 m3 71,9588 15.774,73",
+    "Haneandele 64,50 andele 130,4755 8.415,67",
+    "Grundgebyr 959,00 andele 21,9387 21.039,18",
+    "Deres andel af udgifterne i tidsrummet: Kr.01-06-2024 - 31-05-2025",
+    "Varme 6872,53 enheder 6.204,70",
+    "Varmt vand 24,95 m3 1.795,09",
+]
+VARMEKONTROL_WATER = [
+    "BRUGSVANDSOPGØRELSE",
+    "01-06-2024 - 31-05-2025",
+    "24-06-2025",
+    "Forbrugsvand 624,44 m3 60,2964 37.651,37",
+    "Deres andel af udgifterne i tidsrummet: Kr.01-06-2024 - 31-05-2025",
+    "Forbrugsvand 74,33 m3 4.481,83",
+]
+VARMEKONTROL_PERIOD = (date(2024, 6, 1), date(2025, 5, 31))
+
+
+def test_varmekontrol_heat_statement() -> None:
+    """Heat units and hot water heating are read, fixed shares are not."""
+    entries = parse_statement(_text(*VARMEKONTROL_HEAT))
+
+    assert entries == [
+        _entry(PriceComponent.VARME_ENHED, VARMEKONTROL_PERIOD, 0.9028),
+        _entry(VARMT_VAND, VARMEKONTROL_PERIOD, 71.9588),
+    ]
+
+
+def test_varmekontrol_water_statement() -> None:
+    """Forbrugsvand is the cold water price; the own share line is not a price."""
+    entries = parse_statement(_text(*VARMEKONTROL_WATER))
+
+    assert entries == [_entry(BRUGSVAND, VARMEKONTROL_PERIOD, 60.2964)]
+
+
+def test_varmekontrol_line_whose_total_does_not_match_is_ignored() -> None:
+    """Quantity times price must give the total, so misread lines are skipped."""
+    entries = parse_statement(
+        _text("01-06-2024 - 31-05-2025", "Varme 66420,71 enheder 9,0280 59.966,33")
+    )
+
+    assert entries == []
+
+
+def test_varmekontrol_statement_from_a_pdf() -> None:
+    """The Varmekontrol layout is also read through the PDF text extraction."""
+    text = extract_text(make_pdf(VARMEKONTROL_HEAT))
+
+    assert _entry(PriceComponent.VARME_ENHED, VARMEKONTROL_PERIOD, 0.9028) in (
+        parse_statement(text)
+    )
+
+
+def test_for_perioden_wins_over_a_bare_period_line() -> None:
+    """In ista's own layout the For perioden line is the statement period."""
+    entries = parse_statement(
+        _text("01-01-2020 - 31-12-2020", BRUGSVAND_LINE, PERIOD_LINE)
+    )
+
+    assert entries == [_entry(BRUGSVAND, P2, 12.3456789)]
+
+
+def test_heat_units_are_priced_with_the_unit_price() -> None:
+    """Heat units use the Varme enheder price and nothing else."""
+    table = PriceTable([_entry(PriceComponent.VARME_ENHED, P2, 0.9028)])
+
+    assert table.price_on(MeterKind.HEAT_UNITS, date(2025, 1, 1)) == 0.9028
+    assert table.price_on(MeterKind.HEAT, date(2025, 1, 1)) is None

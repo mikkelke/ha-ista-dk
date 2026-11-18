@@ -35,6 +35,7 @@ class PriceComponent(StrEnum):
     BRUGSVAND = "brugsvand"
     VARMT_VAND = "varmt_vand"
     VARME = "varme"
+    VARME_ENHED = "varme_enhed"
 
 
 METER_TYPE_TO_KIND: dict[str, MeterKind] = {
@@ -43,10 +44,6 @@ METER_TYPE_TO_KIND: dict[str, MeterKind] = {
     "ENERGY": MeterKind.HEAT,
     "HCA": MeterKind.HEAT_UNITS,
 }
-
-# Heat cost allocators sit on every radiator, so an apartment has several of
-# them. Their registers are added up into one reading.
-SUMMED_KINDS = frozenset({MeterKind.HEAT_UNITS})
 
 # Heat cost allocators count dimensionless units ("delinger"), not energy.
 HEAT_UNITS_UNIT = "units"

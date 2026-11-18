@@ -21,6 +21,9 @@
       },
       "heat_price": {
         "default": "mdi:cash"
+      },
+      "heat_units_price": {
+        "default": "mdi:cash"
       }
     }
   }
