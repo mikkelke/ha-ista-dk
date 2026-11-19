@@ -108,6 +108,23 @@ The daily units come from ista's `Heat` series. Units are not energy, so they
 cannot be added to the Energy dashboard; use the statistics graph card instead.
 They are priced with the heat units price of the statement, see [Costs](#costs).
 
+#### Individual radiators
+
+Each allocator also gets its own device, *Radiator <room>*, linked to the ista
+device, with a `Heat units` sensor that shows the allocator's own register. When
+two allocators share a room name, the meter number is added to the name. The
+sensor has the attributes `meter_number` and `reading_date`, and the device
+carries the meter number as its serial number, so each radiator can be put in
+its own area.
+
+These are the raw counts read from the allocators, before ista multiplies them by
+the factor of each radiator. They show which radiators use the most heat and
+when, but they do not add up to `ista Heat units`, and they cannot be priced.
+The allocators usually start again from zero at the start of each accounting
+period, which the `total_increasing` state class treats as a new cycle. ista
+provides no daily history per radiator, so there are no long-term statistics for
+them beyond what Home Assistant records from the sensor itself.
+
 ### Several meters of one kind
 
 A flat can have more than one meter of a kind, such as two cold water meters.

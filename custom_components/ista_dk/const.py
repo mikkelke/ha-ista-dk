@@ -64,6 +64,7 @@ ESTIMATE_OPTIONS: dict[PriceComponent, str] = {
 }
 
 ATTR_READING_DATE = "reading_date"
+ATTR_METER_NUMBER = "meter_number"
 ATTR_PERIOD_START = "period_start"
 ATTR_PERIOD_END = "period_end"
 ATTR_SOURCE = "source"

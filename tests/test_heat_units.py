@@ -5,11 +5,12 @@ from typing import Any
 import pytest
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.ista_dk.const import MeterKind
+from custom_components.ista_dk.const import DOMAIN, MeterKind
 from custom_components.ista_dk.statistics import cost_statistic_id, statistic_id
 
 from .common import (
@@ -33,7 +34,12 @@ HEAT_UNITS_COST = cost_statistic_id(CONS_ID, MeterKind.HEAT_UNITS)
 PERIOD = ("01-12-2025", "30-11-2026")
 
 
-def _hca(reading: float | None, reading_date: str | None, room: str) -> dict[str, Any]:
+def _hca(
+    reading: float | None,
+    reading_date: str | None,
+    room: str,
+    meter_no: str = "20000010",
+) -> dict[str, Any]:
     return {
         "Message": " ",
         "Headline": "Varme",
@@ -46,7 +52,7 @@ def _hca(reading: float | None, reading_date: str | None, room: str) -> dict[str
         "Last_Meter_Consumption": 0.0,
         "METER_ID": 80000000010.0,
         "ROOM_DESCR": room,
-        "METER_NO": "20000010",
+        "METER_NO": meter_no,
         "METCAT_LABEL": "Doprimo 3 SoC",
         "METTYPE_CODE": None,
         "Deactivation_date": "3000-01-01T00:00:00",
@@ -60,11 +66,11 @@ def _hca_meters() -> dict[str, Any]:
     rows = [row for row in meters["Meters"]["Value"] if row["MeterType"] != "ENERGY"]
     rows += [
         # Floor heating allocator that has never been read.
-        _hca(0, None, "Bathroom"),
-        _hca(9449, "13-11-2026", "Room"),
-        _hca(6639, "12-11-2026", "Room"),
-        _hca(5626, "13-11-2026", "Kitchen"),
-        _hca(6920, "13-11-2026", "Living Room"),
+        _hca(0, None, "Bathroom", "20000010"),
+        _hca(9449, "13-11-2026", "Room", "20000011"),
+        _hca(6639, "12-11-2026", "Room", "20000012"),
+        _hca(5626, "13-11-2026", "Kitchen", "20000013"),
+        _hca(6920, "13-11-2026", "Living Room", "20000014"),
     ]
     meters["Meters"]["Value"] = rows
     return meters
@@ -244,3 +250,90 @@ async def test_varmekontrol_account_gets_every_cost(
     assert float(hass.states.get("sensor.ista_hot_water_price").state) == (
         pytest.approx(60.2964 + 71.9588)
     )
+
+
+async def test_one_sensor_per_radiator_with_its_raw_register(
+    hass: HomeAssistant,
+    aioclient_mock,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Every allocator gets a device named after its room and a units sensor."""
+    mock_ista(aioclient_mock, meters=_hca_meters())
+
+    entry = await setup_integration(hass)
+
+    expected = {
+        "sensor.radiator_bathroom_heat_units": ("0.0", None, "20000010"),
+        "sensor.radiator_room_20000011_heat_units": (
+            "9449.0",
+            "2026-11-13",
+            "20000011",
+        ),
+        "sensor.radiator_room_20000012_heat_units": (
+            "6639.0",
+            "2026-11-12",
+            "20000012",
+        ),
+        "sensor.radiator_kitchen_heat_units": ("5626.0", "2026-11-13", "20000013"),
+        "sensor.radiator_living_room_heat_units": ("6920.0", "2026-11-13", "20000014"),
+    }
+    account = device_registry.async_get_device_by_identifier(
+        (DOMAIN, CONS_ID), entry.entry_id
+    )
+    assert account is not None
+    for entity_id, (value, reading_date, meter_no) in expected.items():
+        state = hass.states.get(entity_id)
+        assert state is not None, entity_id
+        assert state.state == value
+        assert state.attributes["unit_of_measurement"] == "units"
+        assert state.attributes["state_class"] == "total_increasing"
+        assert state.attributes["reading_date"] == reading_date
+        assert state.attributes["meter_number"] == meter_no
+
+        registered = entity_registry.async_get(entity_id)
+        assert registered.unique_id == f"{CONS_ID}_allocator_{meter_no}"
+        device = device_registry.async_get(registered.device_id)
+        assert device.serial_number == meter_no
+        assert device.model == "Doprimo 3 SoC"
+        assert device.via_device_id == account.id
+
+    # The raw registers are unweighted, so the total stays the daily series.
+    days = [day for day in usage_days("Heat") if day.value is not None]
+    assert float(hass.states.get("sensor.ista_heat_units").state) == sum(
+        day.value for day in days
+    )
+
+
+async def test_radiators_follow_the_meter_list(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """A new allocator is added on refresh, a removed one becomes unavailable."""
+    mock_ista(aioclient_mock, meters=_hca_meters())
+    entry = await setup_integration(hass)
+    assert hass.states.get("sensor.radiator_hall_heat_units") is None
+
+    meters = _hca_meters()
+    rows = meters["Meters"]["Value"]
+    rows[:] = [row for row in rows if row.get("METER_NO") != "20000013"]
+    rows.append(_hca(12, "14-11-2026", "Hall", "20000015"))
+    aioclient_mock.clear_requests()
+    mock_ista(aioclient_mock, meters=meters)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.radiator_hall_heat_units").state == "12.0"
+    assert hass.states.get("sensor.radiator_kitchen_heat_units").state == "unavailable"
+
+
+async def test_no_radiator_sensors_without_allocators(
+    hass: HomeAssistant, ista_api, entity_registry: er.EntityRegistry
+) -> None:
+    """Accounts with a heat meter get no radiator sensors."""
+    entry = await setup_integration(hass)
+
+    unique_ids = {
+        reg.unique_id
+        for reg in er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    }
+    assert not any("_allocator_" in unique_id for unique_id in unique_ids)

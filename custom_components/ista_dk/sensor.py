@@ -17,7 +17,9 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import Allocator
 from .const import (
+    ATTR_METER_NUMBER,
     ATTR_PERIOD_END,
     ATTR_PERIOD_START,
     ATTR_READING_DATE,
@@ -71,6 +73,14 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=0,
     ),
+)
+
+ALLOCATOR_DESCRIPTION = SensorEntityDescription(
+    key="allocator",
+    translation_key="allocator",
+    native_unit_of_measurement=HEAT_UNITS_UNIT,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    suggested_display_precision=0,
 )
 
 PRICE_DESCRIPTIONS: tuple[IstaDkPriceDescription, ...] = (
@@ -134,8 +144,53 @@ async def async_setup_entry(
             IstaDkPriceSensor(coordinator, description) for description in new
         )
 
-    _async_add_price_sensors()
-    entry.async_on_unload(coordinator.async_add_listener(_async_add_price_sensors))
+    added_allocators: set[str] = set()
+
+    @callback
+    def _async_add_allocator_sensors() -> None:
+        new = [
+            allocator
+            for allocator in _allocators(coordinator)
+            if allocator.meter_no not in added_allocators
+        ]
+        added_allocators.update(allocator.meter_no for allocator in new)
+        async_add_entities(
+            IstaDkAllocatorSensor(coordinator, allocator.meter_no) for allocator in new
+        )
+
+    @callback
+    def _async_add_new_sensors() -> None:
+        _async_add_price_sensors()
+        _async_add_allocator_sensors()
+
+    _async_add_new_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))
+
+
+def _allocators(coordinator: IstaDkCoordinator) -> tuple[Allocator, ...]:
+    if (meter := coordinator.data.meters.get(MeterKind.HEAT_UNITS)) is None:
+        return ()
+    return meter.allocators
+
+
+def _account_device(coordinator: IstaDkCoordinator) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, coordinator.cons_id)},
+        name="ista",
+        manufacturer="ista",
+        model="istaonline.dk",
+        entry_type=DeviceEntryType.SERVICE,
+        configuration_url="https://www.istaonline.dk",
+    )
+
+
+def _allocator_label(allocator: Allocator, allocators: tuple[Allocator, ...]) -> str:
+    """Name a radiator by its room, adding the meter number when that is ambiguous."""
+    if not allocator.room:
+        return allocator.meter_no
+    if sum(other.room == allocator.room for other in allocators) > 1:
+        return f"{allocator.room} {allocator.meter_no}"
+    return allocator.room
 
 
 class IstaDkEntity(CoordinatorEntity[IstaDkCoordinator], SensorEntity):
@@ -149,14 +204,7 @@ class IstaDkEntity(CoordinatorEntity[IstaDkCoordinator], SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.cons_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.cons_id)},
-            name="ista",
-            manufacturer="ista",
-            model="istaonline.dk",
-            entry_type=DeviceEntryType.SERVICE,
-            configuration_url="https://www.istaonline.dk",
-        )
+        self._attr_device_info = _account_device(coordinator)
 
 
 class IstaDkSensor(IstaDkEntity):
@@ -217,4 +265,63 @@ class IstaDkPriceSensor(IstaDkEntity):
             ATTR_PERIOD_END: (
                 current.period_end.isoformat() if current.period_end else None
             ),
+        }
+
+
+class IstaDkAllocatorSensor(IstaDkEntity):
+    """Raw register of the heat cost allocator on one radiator.
+
+    The register is the allocator's own count, before ista weighs it with the
+    factor of the radiator, so the allocators do not add up to the heat units.
+    """
+
+    def __init__(self, coordinator: IstaDkCoordinator, meter_no: str) -> None:
+        super().__init__(coordinator, ALLOCATOR_DESCRIPTION)
+        self._meter_no = meter_no
+        self._attr_unique_id = f"{coordinator.cons_id}_allocator_{meter_no}"
+        allocators = _allocators(coordinator)
+        allocator = self._allocator
+        assert allocator is not None
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{coordinator.cons_id}_allocator_{meter_no}")},
+            translation_key="allocator",
+            translation_placeholders={"name": _allocator_label(allocator, allocators)},
+            manufacturer="ista",
+            model=allocator.model or None,
+            serial_number=meter_no,
+            via_device=(DOMAIN, coordinator.cons_id),
+        )
+
+    @property
+    def _allocator(self) -> Allocator | None:
+        return next(
+            (
+                allocator
+                for allocator in _allocators(self.coordinator)
+                if allocator.meter_no == self._meter_no
+            ),
+            None,
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return whether ista still lists the allocator."""
+        return super().available and self._allocator is not None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the allocator's register."""
+        allocator = self._allocator
+        return allocator.reading if allocator else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the meter number and the date of the latest reading."""
+        if (allocator := self._allocator) is None:
+            return None
+        return {
+            ATTR_METER_NUMBER: allocator.meter_no,
+            ATTR_READING_DATE: allocator.reading_date.isoformat()
+            if allocator.reading_date
+            else None,
         }
