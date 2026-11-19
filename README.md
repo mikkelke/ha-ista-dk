@@ -16,7 +16,8 @@ This is an unofficial integration. It is not affiliated with or endorsed by ista
 ## Features
 
 - UI-based setup with your consumer number (forbrugernummer) and password
-- One cumulative sensor per meter: cold water (m³), hot water (m³) and heat (kWh)
+- One cumulative sensor per meter: cold water (m³), hot water (m³) and heat (kWh),
+  or heat units for apartments with heat cost allocators on the radiators
 - The full daily consumption history that ista provides, imported as long-term
   statistics and extended on every poll
 - Cost statistics per meter, priced with the unit prices printed on your ista
@@ -74,9 +75,11 @@ One device per account, with one sensor for each meter the account has:
 | `ista Cold water` | m³ | Cumulative register of the cold water meter |
 | `ista Hot water` | m³ | Cumulative register of the hot water meter |
 | `ista Heat` | kWh | Cumulative register of the heat meter |
+| `ista Heat units` | units | Total of the weighted daily heat units |
 | `ista Cold water price` | currency/m³ | Unit price of cold water |
 | `ista Hot water price` | currency/m³ | Unit price of hot water |
 | `ista Heat price` | currency/kWh | Unit price of heat |
+| `ista Heat units price` | currency/units | Unit price of heat units |
 
 The meter sensors use the `total_increasing` state class. Each has a
 `reading_date` attribute with the date of the latest reading as an ISO date.
@@ -84,6 +87,49 @@ The meter sensors use the `total_increasing` state class. Each has a
 The price sensors appear once a unit price is known, see [Costs](#costs). They
 have the attributes `source` (`settled` or `estimate`), `period_start` and
 `period_end`.
+
+### Heat cost allocators
+
+Many apartments measure heat with a heat cost allocator (*varmefordeler*, ista
+meter type `HCA`) on each radiator instead of one heat meter. These count
+dimensionless units (*delinger*), not kWh. Each allocator's count is multiplied
+by a factor for the size and output of its radiator, and ista's `Heat` series
+holds the daily total of these weighted units, the units you are billed for.
+The raw allocator registers are not, so the `ista Heat units` sensor shows the
+running total of the imported daily units instead, the same value as the `sum`
+of the statistic. Its `reading_date` is the last day with a value, which lags
+about a week like the statistics.
+
+Fixed units that are not measured, such as floor heating billed as a set number
+of units, are not in the daily series, so they are missing from the units and
+their cost.
+
+The daily units come from ista's `Heat` series. Units are not energy, so they
+cannot be added to the Energy dashboard; use the statistics graph card instead.
+They are priced with the heat units price of the statement, see [Costs](#costs).
+
+#### Individual radiators
+
+Each allocator also gets its own device, *Radiator <room>*, linked to the ista
+device, with a `Heat units` sensor that shows the allocator's own register. When
+two allocators share a room name, the meter number is added to the name. The
+sensor has the attributes `meter_number` and `reading_date`, and the device
+carries the meter number as its serial number, so each radiator can be put in
+its own area.
+
+These are the raw counts read from the allocators, before ista multiplies them by
+the factor of each radiator. They show which radiators use the most heat and
+when, but they do not add up to `ista Heat units`, and they cannot be priced.
+The allocators usually start again from zero at the start of each accounting
+period, which the `total_increasing` state class treats as a new cycle. ista
+provides no daily history per radiator, so there are no long-term statistics for
+them beyond what Home Assistant records from the sensor itself.
+
+### Several meters of one kind
+
+A flat can have more than one meter of a kind, such as two cold water meters.
+Their registers are added up into the one sensor of that kind. Meters whose
+deactivation date has passed are left out.
 
 ## Statistics
 
@@ -94,6 +140,7 @@ The daily consumption is imported as external long-term statistics, one per mete
 | `ista_dk:<consumer number>_cold_water` | m³ |
 | `ista_dk:<consumer number>_hot_water` | m³ |
 | `ista_dk:<consumer number>_heat` | kWh |
+| `ista_dk:<consumer number>_heat_units` | units |
 
 Each day is one row that starts at local midnight in Home Assistant's time zone.
 The row's `state` is the consumption of that day and its `sum` is the running
@@ -112,7 +159,8 @@ history from ista once more.
 
 ## Costs
 
-ista sends a settlement statement for water (*Brugsvandsregnskab*) and one for
+ista sends a settlement statement for water (*Brugsvandsregnskab*, at some
+properties *Vandregnskab*) and one for
 heat (*Varmeregnskab*) for each accounting period. The integration lists them
 on every poll, downloads each PDF once, reads the unit prices from its first page
 and keeps them in Home Assistant's storage.
@@ -122,6 +170,14 @@ and keeps them in Home Assistant's storage.
 | Cold water | *Brugsvand kubikmeter* |
 | Hot water | *Brugsvand kubikmeter* plus *Varmt vand kubikmeter* |
 | Heat | *Varme KWh* |
+| Heat units | *Varme … enheder* (Varmekontrol layout) |
+
+Some properties get their statements from Varmekontrol, which prints a bare
+period line and the price lines as *label quantity unit price total*, for example
+`Varme 66420,71 enheder 0,9028 59.966,33`. There *Forbrugsvand* is the
+*Brugsvand* price, *Varmt vand … m3* the hot water heating price and
+*Varme … enheder* the heat units price. A line is only used when its quantity
+times its price gives its total.
 
 The prices are taken as printed. Fixed charges on the statements (per square
 meter, tap shares, energy management and so on) are not included, so the cost is

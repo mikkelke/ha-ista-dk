@@ -15,7 +15,8 @@ STATEMENT_URL = (
 )
 
 STATEMENT_ACCOUNT_ID = "CONSUMER_DIVISION_STATEMENT"
-STATEMENT_TYPES = frozenset({"Brugsvandsregnskab", "Varmeregnskab"})
+# Some properties list the water statement as Vandregnskab instead.
+STATEMENT_TYPES = frozenset({"Brugsvandsregnskab", "Vandregnskab", "Varmeregnskab"})
 
 UPDATE_INTERVAL = timedelta(hours=6)
 
@@ -26,6 +27,7 @@ class MeterKind(StrEnum):
     COLD_WATER = "cold_water"
     HOT_WATER = "hot_water"
     HEAT = "heat"
+    HEAT_UNITS = "heat_units"
 
 
 class PriceComponent(StrEnum):
@@ -34,18 +36,24 @@ class PriceComponent(StrEnum):
     BRUGSVAND = "brugsvand"
     VARMT_VAND = "varmt_vand"
     VARME = "varme"
+    VARME_ENHED = "varme_enhed"
 
 
 METER_TYPE_TO_KIND: dict[str, MeterKind] = {
     "CW": MeterKind.COLD_WATER,
     "HW": MeterKind.HOT_WATER,
     "ENERGY": MeterKind.HEAT,
+    "HCA": MeterKind.HEAT_UNITS,
 }
+
+# Heat cost allocators count dimensionless units ("delinger"), not energy.
+HEAT_UNITS_UNIT = "units"
 
 USAGE_SERIES: dict[MeterKind, str] = {
     MeterKind.COLD_WATER: "WaterCold",
     MeterKind.HOT_WATER: "WaterHot",
     MeterKind.HEAT: "Energy",
+    MeterKind.HEAT_UNITS: "Heat",
 }
 
 CONF_ESTIMATE_AFTER = "estimate_after"
@@ -56,6 +64,7 @@ ESTIMATE_OPTIONS: dict[PriceComponent, str] = {
 }
 
 ATTR_READING_DATE = "reading_date"
+ATTR_METER_NUMBER = "meter_number"
 ATTR_PERIOD_START = "period_start"
 ATTR_PERIOD_END = "period_end"
 ATTR_SOURCE = "source"

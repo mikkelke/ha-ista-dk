@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
 from typing import Any
@@ -51,12 +51,27 @@ class LoginInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class Allocator:
+    """The raw register of one heat cost allocator on a radiator."""
+
+    meter_no: str
+    room: str
+    model: str
+    reading: float | None
+    reading_date: date | None
+
+
+@dataclass(frozen=True, slots=True)
 class Meter:
-    """The current register reading of one meter."""
+    """The current register reading of one meter kind.
+
+    For heat units, ``allocators`` holds the individual heat cost allocators.
+    """
 
     kind: MeterKind
     reading: float | None
     reading_date: date | None
+    allocators: tuple[Allocator, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,19 +149,74 @@ def _parse_statements(payload: Any) -> list[Statement]:
     return statements
 
 
+def _is_deactivated(raw: Any) -> bool:
+    """Return whether a meter's deactivation date has passed."""
+    try:
+        deactivated = datetime.fromisoformat(raw).date()
+    except (TypeError, ValueError):
+        return False
+    return deactivated <= datetime.now(UTC).date()
+
+
 def _parse_meters(payload: Any) -> dict[MeterKind, Meter]:
-    meters: dict[MeterKind, Meter] = {}
+    """Return one reading per meter kind.
+
+    A flat can have several meters of a kind, e.g. two cold water meters or a
+    heat cost allocator on every radiator. Their registers are added up.
+    """
+    parts: dict[MeterKind, list[Meter]] = {}
+    allocators: list[Allocator] = []
     for row in payload["Meters"]["Value"]:
         kind = METER_TYPE_TO_KIND.get(row["MeterType"])
-        if kind is None or kind in meters:
+        if kind is None or _is_deactivated(row.get("Deactivation_date")):
             continue
-        reading = row.get("Last_Meter_Reading")
-        meters[kind] = Meter(
-            kind=kind,
-            reading=None if reading is None else float(reading),
-            reading_date=_parse_reading_date(row.get("Reading_date")),
+        raw = row.get("Last_Meter_Reading")
+        reading = None if raw is None else float(raw)
+        reading_date = _parse_reading_date(row.get("Reading_date"))
+        parts.setdefault(kind, []).append(
+            Meter(kind=kind, reading=reading, reading_date=reading_date)
+        )
+        if kind is MeterKind.HEAT_UNITS and (meter_no := _meter_no(row)):
+            allocators.append(
+                Allocator(
+                    meter_no=meter_no,
+                    room=str(row.get("ROOM_DESCR") or "").strip(),
+                    model=str(row.get("METCAT_LABEL") or "").strip(),
+                    reading=reading,
+                    reading_date=reading_date,
+                )
+            )
+    meters = {kind: _sum_meters(kind, meters) for kind, meters in parts.items()}
+    if MeterKind.HEAT_UNITS in meters:
+        meters[MeterKind.HEAT_UNITS] = replace(
+            meters[MeterKind.HEAT_UNITS], allocators=tuple(allocators)
         )
     return meters
+
+
+def _meter_no(row: dict[str, Any]) -> str | None:
+    """Return the number printed on a meter, or ista's id when it has none."""
+    for key in ("METER_NO", "METER_ID"):
+        raw = row.get(key)
+        if isinstance(raw, float) and raw.is_integer():
+            raw = int(raw)
+        if raw is not None and (value := str(raw).strip()):
+            return value
+    return None
+
+
+def _sum_meters(kind: MeterKind, parts: list[Meter]) -> Meter:
+    """Add up the registers of several meters of one kind.
+
+    Meters without a reading are left out; the date is the newest one.
+    """
+    readings = [part.reading for part in parts if part.reading is not None]
+    dates = [part.reading_date for part in parts if part.reading_date is not None]
+    return Meter(
+        kind=kind,
+        reading=sum(readings) if readings else None,
+        reading_date=max(dates) if dates else None,
+    )
 
 
 def _parse_usage(payload: Any) -> list[UsageDay]:

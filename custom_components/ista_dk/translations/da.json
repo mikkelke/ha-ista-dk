@@ -47,6 +47,11 @@
       }
     }
   },
+  "device": {
+    "allocator": {
+      "name": "Radiator {name}"
+    }
+  },
   "entity": {
     "sensor": {
       "cold_water": {
@@ -58,6 +63,9 @@
       "heat": {
         "name": "Varme"
       },
+      "heat_units": {
+        "name": "Varmedelinger"
+      },
       "cold_water_price": {
         "name": "Pris for koldt vand"
       },
@@ -66,6 +74,12 @@
       },
       "heat_price": {
         "name": "Pris for varme"
+      },
+      "heat_units_price": {
+        "name": "Pris for varmedelinger"
+      },
+      "allocator": {
+        "name": "Varmedelinger"
       }
     }
   }

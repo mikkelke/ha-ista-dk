@@ -25,7 +25,7 @@ from homeassistant.util import dt as dt_util, slugify
 from homeassistant.util.unit_conversion import EnergyConverter, VolumeConverter
 
 from .api import UsageDay
-from .const import DOMAIN, MeterKind
+from .const import DOMAIN, HEAT_UNITS_UNIT, MeterKind
 from .prices import PriceTable
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 class _StatisticKind:
     name: str
     unit: str
-    unit_class: str
+    unit_class: str | None
 
 
 STATISTIC_KINDS: dict[MeterKind, _StatisticKind] = {
@@ -48,6 +48,7 @@ STATISTIC_KINDS: dict[MeterKind, _StatisticKind] = {
     MeterKind.HEAT: _StatisticKind(
         "ista Heat", UnitOfEnergy.KILO_WATT_HOUR, EnergyConverter.UNIT_CLASS
     ),
+    MeterKind.HEAT_UNITS: _StatisticKind("ista Heat units", HEAT_UNITS_UNIT, None),
 }
 
 
@@ -105,8 +106,11 @@ async def async_import_statistics(
     cons_id: str,
     kind: MeterKind,
     days: Iterable[UsageDay],
-) -> None:
-    """Insert the days newer than the last stored statistic."""
+) -> float | None:
+    """Insert the days newer than the last stored statistic.
+
+    Return the running total after the newest day, None when nothing is stored.
+    """
     stat_id = statistic_id(cons_id, kind)
     last_stats = await get_instance(hass).async_add_executor_job(
         get_last_statistics, hass, 1, stat_id, False, {"sum"}
@@ -121,7 +125,7 @@ async def async_import_statistics(
 
     statistics = build_statistics(days, after=after, running_sum=running_sum)
     if not statistics:
-        return
+        return running_sum if last_stats else None
 
     statistic_kind = STATISTIC_KINDS[kind]
     metadata: StatisticMetaData = {
@@ -135,6 +139,7 @@ async def async_import_statistics(
     }
     _LOGGER.debug("Importing %d statistics for %s", len(statistics), stat_id)
     async_add_external_statistics(hass, metadata, statistics)
+    return statistics[-1]["sum"]
 
 
 def build_cost_statistics(

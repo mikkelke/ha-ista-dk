@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from custom_components.ista_dk.api import (
+    Allocator,
     IstaDkApi,
     IstaDkApiError,
     IstaDkAuthError,
@@ -123,8 +124,39 @@ async def test_unknown_meter_types_and_bad_readings(api, aioclient_mock) -> None
 
     result = await api.async_get_meters()
 
-    assert set(result) == set(MeterKind)
+    assert set(result) == set(MeterKind) - {MeterKind.HEAT_UNITS}
     assert result[MeterKind.HOT_WATER] == Meter(MeterKind.HOT_WATER, None, None)
+
+
+async def test_allocators_are_kept_one_by_one(api, aioclient_mock) -> None:
+    """Heat cost allocators add up and keep their own registers and rooms."""
+    meters = load_json("meters.json")
+    rows = meters["Meters"]["Value"]
+    hca = {
+        **rows[0],
+        "MeterType": "HCA",
+        "Unit": "Delinger",
+        "METCAT_LABEL": "Doprimo 3 SoC",
+    }
+    rows += [
+        {**hca, "Last_Meter_Reading": 100, "ROOM_DESCR": "Kitchen ", "METER_NO": "1"},
+        {**hca, "Last_Meter_Reading": 50, "ROOM_DESCR": "", "METER_NO": None},
+        {
+            **hca,
+            "Last_Meter_Reading": 999,
+            "METER_NO": "3",
+            "Deactivation_date": "2023-07-28T00:00:00",
+        },
+    ]
+    mock_ista(aioclient_mock, meters=meters)
+
+    units = (await api.async_get_meters())[MeterKind.HEAT_UNITS]
+
+    assert units.reading == 150
+    assert units.allocators == (
+        Allocator("1", "Kitchen", "Doprimo 3 SoC", 100.0, date(2026, 10, 7)),
+        Allocator("80000000001", "", "Doprimo 3 SoC", 50.0, date(2026, 10, 7)),
+    )
 
 
 @pytest.mark.parametrize(
@@ -166,6 +198,7 @@ async def test_get_usage_uses_ista_headers_and_parses_days(api, aioclient_mock) 
         (MeterKind.COLD_WATER, "WaterCold"),
         (MeterKind.HOT_WATER, "WaterHot"),
         (MeterKind.HEAT, "Energy"),
+        (MeterKind.HEAT_UNITS, "Heat"),
     ],
 )
 async def test_usage_series_per_kind(api, aioclient_mock, kind, series) -> None:
@@ -346,6 +379,7 @@ async def test_get_statements_keeps_the_consumer_statements(
             account_id="FORECAST",
         ),
         StatementDoc("100000004", "Elregnskab", ("01-12-2024", "30-11-2025")),
+        StatementDoc("100000006", "Vandregnskab", ("01-12-2024", "30-11-2025")),
         StatementDoc(
             "100000005",
             "Varmeregnskab",
@@ -371,6 +405,13 @@ async def test_get_statements_keeps_the_consumer_statements(
             INST_ID,
             CONS_ID,
             "Brugsvandsregnskab 01.12.2024 - 30.11.2025",
+        ),
+        Statement(
+            "100000006",
+            WORKS_ID,
+            INST_ID,
+            CONS_ID,
+            "Vandregnskab 01.12.2024 - 30.11.2025",
         ),
     ]
     assert docs[0].row()["account_id"] == STATEMENT_ACCOUNT_ID

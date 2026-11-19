@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -69,8 +69,26 @@ class IstaDkCoordinator(DataUpdateCoordinator[IstaDkData]):
             raise UpdateFailed(str(err)) from err
 
         for kind, days in usage.items():
-            await async_import_statistics(self.hass, self.cons_id, kind, days)
+            total = await async_import_statistics(self.hass, self.cons_id, kind, days)
+            if kind is MeterKind.HEAT_UNITS:
+                meters[kind] = _weighted_units(meters[kind], days, total)
             await async_import_cost_statistics(
                 self.hass, self.cons_id, kind, days, prices
             )
         return IstaDkData(meters=meters, usage=usage, prices=prices)
+
+
+def _weighted_units(meter: Meter, days: list[UsageDay], total: float | None) -> Meter:
+    """Report heat units as the total of the daily series instead of the registers.
+
+    The registers of heat cost allocators are raw counts, while the daily series
+    and the statements weigh every radiator with its own factor. The total is the
+    running sum of the imported statistic, so it never drops when ista leaves
+    old days out of the series.
+    """
+    with_value = [day.day for day in days if day.value is not None]
+    return replace(
+        meter,
+        reading=total,
+        reading_date=max(with_value) if with_value else None,
+    )
